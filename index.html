@@ -1,0 +1,60 @@
+// [HTML AND CSS REMAIN UNCHANGED — OMITTED FOR BREVITY — SEE ORIGINAL ABOVE]
+
+<script>
+  // [... previous variables and DOM element selectors unchanged ...]
+
+  function computerPlay() {
+    const rows = document.querySelectorAll('.row');
+    const gameState = [];
+
+    rows.forEach(row => {
+      const bars = Array.from(row.querySelectorAll('.bar'));
+      const state = bars.map(bar => bar.classList.contains('struck') ? 0 : 1);
+      gameState.push(state);
+    });
+
+    // Flatten to calculate nim sum
+    const nimbers = gameState.map(row => row.reduce((a, b) => a + b, 0));
+    const nimSum = nimbers.reduce((a, b) => a ^ b, 0);
+
+    if (nimSum === 0) {
+      // No winning move, just strike the first available in any row
+      for (const row of rows) {
+        const bars = Array.from(row.querySelectorAll('.bar'));
+        const unstruck = bars.filter(b => !b.classList.contains('struck'));
+        if (unstruck.length > 0) {
+          unstruck[0].classList.add('struck');
+          lastMove = [unstruck[0]];
+          checkGameOver();
+          switchPlayer();
+          return;
+        }
+      }
+    } else {
+      // Find a row where we can create zero nimSum
+      for (let r = 0; r < gameState.length; r++) {
+        const row = gameState[r];
+        const total = row.reduce((a, b) => a + b, 0);
+        const target = total ^ nimSum;
+        const bars = Array.from(rows[r].querySelectorAll('.bar'));
+        if (target < total) {
+          const toStrike = total - target;
+          const selected = [];
+          for (let i = 0; i < bars.length; i++) {
+            if (!bars[i].classList.contains('struck')) {
+              selected.push(bars[i]);
+              if (selected.length === toStrike) break;
+            }
+          }
+          selected.forEach(bar => bar.classList.add('struck'));
+          lastMove = [...selected];
+          checkGameOver();
+          switchPlayer();
+          return;
+        }
+      }
+    }
+  }
+
+  // [... rest of JS unchanged: restartBtn, undoBtn, strikeoutBtn, playComputerBtn, helpBtn, buildBoard ...]
+</script>
