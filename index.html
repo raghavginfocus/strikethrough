@@ -170,6 +170,7 @@
 
       if (!isSameRow || !isConsecutive) {
         alert('Only consecutive bars in the same row can be struck.');
+        bars.forEach(bar => bar.classList.remove('hover-path'));
         return;
       }
 
