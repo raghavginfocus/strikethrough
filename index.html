@@ -1,60 +1,283 @@
-// [HTML AND CSS REMAIN UNCHANGED — OMITTED FOR BREVITY — SEE ORIGINAL ABOVE]
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Strikethrough Game</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+      margin: 0;
+    }
+    .game-board {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .row {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      position: relative;
+    }
+    .bar {
+      width: 10px;
+      height: 50px;
+      background-color: black;
+      position: relative;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: transform 0.1s, box-shadow 0.2s, background-color 0.2s;
+    }
+    .bar.hover-path {
+      background-color: gray !important;
+    }
+    .bar:hover {
+      transform: scale(1.1);
+    }
+    .bar.struck::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -6px;
+      width: 20px;
+      height: 3px;
+      background-color: red;
+      transform: rotate(45deg);
+    }
+    .bar.struck {
+      background-color: gray;
+    }
+    #turn-indicator {
+      margin-bottom: 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    #restart, #undo, #strikeout, #play-computer {
+      margin: 10px;
+      padding: 8px 16px;
+      font-size: 1em;
+      cursor: pointer;
+      border-radius: 4px;
+      border: none;
+      background-color: #007BFF;
+      color: white;
+    }
+    #restart:hover, #undo:hover, #strikeout:hover, #play-computer:hover {
+      background-color: #0056b3;
+    }
+    #help {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #007BFF;
+      color: white;
+      font-size: 20px;
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      cursor: pointer;
+    }
+    #help-dialog {
+      display: none;
+      position: absolute;
+      top: 50px;
+      right: 10px;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 6px;
+      width: 300px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <button id="help">?</button>
+  <div id="help-dialog">
+    <strong>How to Play:</strong>
+    <ul>
+      <li>Click bars to select them (they turn gray).</li>
+      <li>Only consecutive bars in the same row can be struck.</li>
+      <li>Click <strong>Strike Out</strong> to confirm your move.</li>
+      <li>The player who strikes the last bar <strong>loses</strong>.</li>
+      <li>Use <strong>Play with Computer</strong> to challenge the system.</li>
+    </ul>
+  </div>
 
-<script>
-  // [... previous variables and DOM element selectors unchanged ...]
+  <div id="turn-indicator">Player 1's Turn</div>
+  <div class="game-board" id="gameBoard"></div>
+  <button id="undo">Undo Last Move</button>
+  <button id="strikeout">Strike Out</button>
+  <button id="restart">Restart Game</button>
+  <button id="play-computer">Play with Computer</button>
 
-  function computerPlay() {
-    const rows = document.querySelectorAll('.row');
-    const gameState = [];
+  <script>
+    const structure = [1, 2, 3, 4, 5];
+    const gameBoard = document.getElementById('gameBoard');
+    const turnIndicator = document.getElementById('turn-indicator');
+    const restartBtn = document.getElementById('restart');
+    const undoBtn = document.getElementById('undo');
+    const strikeoutBtn = document.getElementById('strikeout');
+    const playComputerBtn = document.getElementById('play-computer');
+    const helpBtn = document.getElementById('help');
+    const helpDialog = document.getElementById('help-dialog');
 
-    rows.forEach(row => {
-      const bars = Array.from(row.querySelectorAll('.bar'));
-      const state = bars.map(bar => bar.classList.contains('struck') ? 0 : 1);
-      gameState.push(state);
-    });
+    let currentPlayer = 1;
+    let lastMove = [];
+    let playWithComputer = false;
 
-    // Flatten to calculate nim sum
-    const nimbers = gameState.map(row => row.reduce((a, b) => a + b, 0));
-    const nimSum = nimbers.reduce((a, b) => a ^ b, 0);
+    function buildBoard() {
+      gameBoard.innerHTML = '';
+      structure.forEach((count, rowIndex) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.dataset.row = rowIndex;
 
-    if (nimSum === 0) {
-      // No winning move, just strike the first available in any row
-      for (const row of rows) {
-        const bars = Array.from(row.querySelectorAll('.bar'));
-        const unstruck = bars.filter(b => !b.classList.contains('struck'));
-        if (unstruck.length > 0) {
-          unstruck[0].classList.add('struck');
-          lastMove = [unstruck[0]];
-          checkGameOver();
-          switchPlayer();
-          return;
+        for (let i = 0; i < count; i++) {
+          const bar = document.createElement('div');
+          bar.className = 'bar';
+          bar.dataset.row = rowIndex;
+          bar.dataset.index = i;
+
+          bar.addEventListener('click', () => toggleGray(bar));
+          row.appendChild(bar);
         }
+        gameBoard.appendChild(row);
+      });
+    }
+
+    function toggleGray(clickedBar) {
+      if (clickedBar.classList.contains('struck')) return;
+      clickedBar.classList.toggle('hover-path');
+    }
+
+    function strikeOutBars() {
+      const bars = document.querySelectorAll('.bar.hover-path');
+      if (bars.length === 0) return;
+
+      const row = bars[0].dataset.row;
+      const indices = Array.from(bars).map(b => parseInt(b.dataset.index)).sort((a, b) => a - b);
+      const isSameRow = Array.from(bars).every(b => b.dataset.row === row);
+      const isConsecutive = indices.every((val, i, arr) => i === 0 || val === arr[i - 1] + 1);
+
+      if (!isSameRow || !isConsecutive) {
+        alert('Only consecutive bars in the same row can be struck.');
+        return;
       }
-    } else {
-      // Find a row where we can create zero nimSum
-      for (let r = 0; r < gameState.length; r++) {
-        const row = gameState[r];
-        const total = row.reduce((a, b) => a + b, 0);
-        const target = total ^ nimSum;
-        const bars = Array.from(rows[r].querySelectorAll('.bar'));
-        if (target < total) {
-          const toStrike = total - target;
-          const selected = [];
-          for (let i = 0; i < bars.length; i++) {
-            if (!bars[i].classList.contains('struck')) {
-              selected.push(bars[i]);
-              if (selected.length === toStrike) break;
-            }
+
+      lastMove = [];
+      bars.forEach(bar => {
+        bar.classList.remove('hover-path');
+        bar.classList.add('struck');
+        lastMove.push(bar);
+      });
+      navigator.vibrate?.(100);
+      checkGameOver();
+      switchPlayer();
+
+      if (playWithComputer && currentPlayer === 2) {
+        setTimeout(computerPlay, 1000);
+      }
+    }
+
+    function switchPlayer() {
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      turnIndicator.textContent = `Player ${currentPlayer}'s Turn${playWithComputer ? ' (vs Computer)' : ''}`;
+    }
+
+    function checkGameOver() {
+      const bars = document.querySelectorAll('.bar');
+      const remaining = Array.from(bars).filter(bar => !bar.classList.contains('struck'));
+      if (remaining.length === 0) {
+        alert(`Game over! Player ${currentPlayer} loses.`);
+      }
+    }
+
+    function computerPlay() {
+      const rows = document.querySelectorAll('.row');
+      const gameState = [];
+
+      rows.forEach(row => {
+        const bars = Array.from(row.querySelectorAll('.bar'));
+        const state = bars.map(bar => bar.classList.contains('struck') ? 0 : 1);
+        gameState.push(state);
+      });
+
+      const nimbers = gameState.map(row => row.reduce((a, b) => a + b, 0));
+      const nimSum = nimbers.reduce((a, b) => a ^ b, 0);
+
+      if (nimSum === 0) {
+        for (const row of rows) {
+          const bars = Array.from(row.querySelectorAll('.bar'));
+          const unstruck = bars.filter(b => !b.classList.contains('struck'));
+          if (unstruck.length > 0) {
+            unstruck[0].classList.add('struck');
+            lastMove = [unstruck[0]];
+            checkGameOver();
+            switchPlayer();
+            return;
           }
-          selected.forEach(bar => bar.classList.add('struck'));
-          lastMove = [...selected];
-          checkGameOver();
-          switchPlayer();
-          return;
+        }
+      } else {
+        for (let r = 0; r < gameState.length; r++) {
+          const row = gameState[r];
+          const total = row.reduce((a, b) => a + b, 0);
+          const target = total ^ nimSum;
+          const bars = Array.from(rows[r].querySelectorAll('.bar'));
+          if (target < total) {
+            const toStrike = total - target;
+            const selected = [];
+            for (let i = 0; i < bars.length; i++) {
+              if (!bars[i].classList.contains('struck')) {
+                selected.push(bars[i]);
+                if (selected.length === toStrike) break;
+              }
+            }
+            selected.forEach(bar => bar.classList.add('struck'));
+            lastMove = [...selected];
+            checkGameOver();
+            switchPlayer();
+            return;
+          }
         }
       }
     }
-  }
 
-  // [... rest of JS unchanged: restartBtn, undoBtn, strikeoutBtn, playComputerBtn, helpBtn, buildBoard ...]
-</script>
+    restartBtn.addEventListener('click', () => {
+      currentPlayer = 1;
+      playWithComputer = false;
+      turnIndicator.textContent = `Player 1's Turn`;
+      buildBoard();
+    });
+
+    undoBtn.addEventListener('click', () => {
+      lastMove.forEach(bar => bar.classList.remove('struck'));
+      lastMove = [];
+      switchPlayer();
+    });
+
+    strikeoutBtn.addEventListener('click', strikeOutBars);
+
+    playComputerBtn.addEventListener('click', () => {
+      playWithComputer = true;
+      currentPlayer = 1;
+      turnIndicator.textContent = `Player 1's Turn (vs Computer)`;
+      buildBoard();
+    });
+
+    helpBtn.addEventListener('click', () => {
+      helpDialog.style.display = helpDialog.style.display === 'block' ? 'none' : 'block';
+    });
+
+    buildBoard();
+  </script>
+</body>
+</html>
