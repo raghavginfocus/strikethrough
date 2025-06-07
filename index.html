@@ -188,16 +188,24 @@
       }
     }
 
+    function updateTurnIndicator() {
+      const isComputerTurn = playWithComputer && currentPlayer === 2;
+      const playerText = isComputerTurn ? 'Computer' : `Player ${currentPlayer}`;
+      const suffix = playWithComputer && !isComputerTurn ? ' (vs Computer)' : '';
+      turnIndicator.textContent = `${playerText}'s Turn${suffix}`;
+    }
+
     function switchPlayer() {
       currentPlayer = currentPlayer === 1 ? 2 : 1;
-      turnIndicator.textContent = `Player ${currentPlayer}'s Turn${playWithComputer ? ' (vs Computer)' : ''}`;
+      updateTurnIndicator();
     }
 
     function checkGameOver() {
       const bars = document.querySelectorAll('.bar');
       const remaining = Array.from(bars).filter(bar => !bar.classList.contains('struck'));
       if (remaining.length === 0) {
-        alert(`Game over! Player ${currentPlayer} loses.`);
+        const loser = playWithComputer && currentPlayer === 2 ? 'Computer' : `Player ${currentPlayer}`;
+        alert(`Game over! ${loser} loses.`);
       }
     }
 
@@ -254,7 +262,7 @@
     restartBtn.addEventListener('click', () => {
       currentPlayer = 1;
       playWithComputer = false;
-      turnIndicator.textContent = `Player 1's Turn`;
+      updateTurnIndicator();
       buildBoard();
     });
 
@@ -269,7 +277,7 @@
     playComputerBtn.addEventListener('click', () => {
       playWithComputer = true;
       currentPlayer = 1;
-      turnIndicator.textContent = `Player 1's Turn (vs Computer)`;
+      updateTurnIndicator();
       buildBoard();
     });
 
