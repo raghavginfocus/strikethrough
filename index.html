@@ -134,6 +134,33 @@
     let lastMove = [];
     let playWithComputer = false;
 
+    function getUnstruckSegments(row) {
+      const bars = Array.from(row.querySelectorAll('.bar'));
+      const segments = [];
+      let current = [];
+      for (const bar of bars) {
+        if (!bar.classList.contains('struck')) {
+          current.push(bar);
+        } else if (current.length) {
+          segments.push(current);
+          current = [];
+        }
+      }
+      if (current.length) segments.push(current);
+      return segments;
+    }
+
+    function selectContiguousBars(row, count) {
+      const segments = getUnstruckSegments(row);
+      if (segments.length === 0) return [];
+      let segment = segments.find(seg => seg.length >= count);
+      if (!segment) {
+        segment = segments.reduce((a, b) => b.length > a.length ? b : a, segments[0]);
+        count = Math.min(count, segment.length);
+      }
+      return segment.slice(0, count);
+    }
+
     function buildBoard() {
       gameBoard.innerHTML = '';
       structure.forEach((count, rowIndex) => {
@@ -242,11 +269,9 @@
         }
       } else if (rowsWithMoreThanOne === 1) {
         const r = counts.findIndex(c => c > 1);
-        const bars = Array.from(rows[r].querySelectorAll('.bar'))
-          .filter(b => !b.classList.contains('struck'));
         const target = rowsWithOne % 2 === 0 ? 1 : 0;
         const toStrike = counts[r] - target;
-        const selected = bars.slice(0, toStrike);
+        const selected = selectContiguousBars(rows[r], toStrike);
         selected.forEach(b => b.classList.add('struck'));
         lastMove = [...selected];
         checkGameOver();
@@ -272,10 +297,8 @@
           const totalRow = counts[r];
           const target = totalRow ^ nimSum;
           if (target < totalRow) {
-            const bars = Array.from(rows[r].querySelectorAll('.bar'))
-              .filter(b => !b.classList.contains('struck'));
             const toStrike = totalRow - target;
-            const selected = bars.slice(0, toStrike);
+            const selected = selectContiguousBars(rows[r], toStrike);
             selected.forEach(b => b.classList.add('struck'));
             lastMove = [...selected];
             checkGameOver();
