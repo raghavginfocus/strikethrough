@@ -212,17 +212,49 @@
 
     function computerPlay() {
       const rows = document.querySelectorAll('.row');
-      const gameState = [];
+      const counts = Array.from(rows).map(row =>
+        Array.from(row.querySelectorAll('.bar'))
+          .filter(b => !b.classList.contains('struck')).length);
+      const total = counts.reduce((a, b) => a + b, 0);
+      const nimSum = counts.reduce((a, b) => a ^ b, 0);
+      const rowsWithMoreThanOne = counts.filter(c => c > 1).length;
+      const rowsWithOne = counts.filter(c => c === 1).length;
 
-      rows.forEach(row => {
-        const bars = Array.from(row.querySelectorAll('.bar'));
-        const state = bars.map(bar => bar.classList.contains('struck') ? 0 : 1);
-        gameState.push(state);
-      });
+      // Misère Nim special cases
+      if (counts.every(c => c <= 1)) {
+        if (total % 2 === 0) {
+          for (let r = 0; r < counts.length; r++) {
+            if (counts[r] === 1) {
+              const bar = Array.from(rows[r].querySelectorAll('.bar'))
+                .find(b => !b.classList.contains('struck'));
+              bar.classList.add('struck');
+              lastMove = [bar];
+              checkGameOver();
+              switchPlayer();
+              return;
+            }
+          }
+        } else {
+          lastMove = [];
+          checkGameOver();
+          switchPlayer();
+          return;
+        }
+      } else if (rowsWithMoreThanOne === 1) {
+        const r = counts.findIndex(c => c > 1);
+        const bars = Array.from(rows[r].querySelectorAll('.bar'))
+          .filter(b => !b.classList.contains('struck'));
+        const target = rowsWithOne % 2 === 0 ? 1 : 0;
+        const toStrike = counts[r] - target;
+        const selected = bars.slice(0, toStrike);
+        selected.forEach(b => b.classList.add('struck'));
+        lastMove = [...selected];
+        checkGameOver();
+        switchPlayer();
+        return;
+      }
 
-      const nimbers = gameState.map(row => row.reduce((a, b) => a + b, 0));
-      const nimSum = nimbers.reduce((a, b) => a ^ b, 0);
-
+      // Normal Nim fallback
       if (nimSum === 0) {
         for (const row of rows) {
           const bars = Array.from(row.querySelectorAll('.bar'));
@@ -236,21 +268,15 @@
           }
         }
       } else {
-        for (let r = 0; r < gameState.length; r++) {
-          const row = gameState[r];
-          const total = row.reduce((a, b) => a + b, 0);
-          const target = total ^ nimSum;
-          const bars = Array.from(rows[r].querySelectorAll('.bar'));
-          if (target < total) {
-            const toStrike = total - target;
-            const selected = [];
-            for (let i = 0; i < bars.length; i++) {
-              if (!bars[i].classList.contains('struck')) {
-                selected.push(bars[i]);
-                if (selected.length === toStrike) break;
-              }
-            }
-            selected.forEach(bar => bar.classList.add('struck'));
+        for (let r = 0; r < counts.length; r++) {
+          const totalRow = counts[r];
+          const target = totalRow ^ nimSum;
+          if (target < totalRow) {
+            const bars = Array.from(rows[r].querySelectorAll('.bar'))
+              .filter(b => !b.classList.contains('struck'));
+            const toStrike = totalRow - target;
+            const selected = bars.slice(0, toStrike);
+            selected.forEach(b => b.classList.add('struck'));
             lastMove = [...selected];
             checkGameOver();
             switchPlayer();
@@ -259,6 +285,7 @@
         }
       }
     }
+
 
     restartBtn.addEventListener('click', () => {
       currentPlayer = 1;
