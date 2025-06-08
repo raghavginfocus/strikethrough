@@ -242,18 +242,17 @@
       const counts = Array.from(rows).map(row =>
         Array.from(row.querySelectorAll('.bar'))
           .filter(b => !b.classList.contains('struck')).length);
-      const total = counts.reduce((a, b) => a + b, 0);
       const nimSum = counts.reduce((a, b) => a ^ b, 0);
       const rowsWithMoreThanOne = counts.filter(c => c > 1).length;
       const rowsWithOne = counts.filter(c => c === 1).length;
 
       // Misère Nim special cases
       if (counts.every(c => c <= 1)) {
-        if (total % 2 === 0) {
-          for (let r = 0; r < counts.length; r++) {
-            if (counts[r] === 1) {
-              const bar = Array.from(rows[r].querySelectorAll('.bar'))
-                .find(b => !b.classList.contains('struck'));
+        for (let r = 0; r < counts.length; r++) {
+          if (counts[r] === 1) {
+            const bar = Array.from(rows[r].querySelectorAll('.bar'))
+              .find(b => !b.classList.contains('struck'));
+            if (bar) {
               bar.classList.add('struck');
               lastMove = [bar];
               checkGameOver();
@@ -261,12 +260,9 @@
               return;
             }
           }
-        } else {
-          lastMove = [];
-          checkGameOver();
-          switchPlayer();
-          return;
         }
+        // No available move means the game is already over
+        return;
       } else if (rowsWithMoreThanOne === 1) {
         const r = counts.findIndex(c => c > 1);
         const target = rowsWithOne % 2 === 0 ? 1 : 0;
