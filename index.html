@@ -1,338 +1,1051 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Strikethrough Game</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      background-color: #f0f0f0;
-      margin: 0;
-    }
-    .game-board {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .row {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      position: relative;
-    }
-    .bar {
-      width: 10px;
-      height: 50px;
-      background-color: black;
-      position: relative;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: transform 0.1s, box-shadow 0.2s, background-color 0.2s;
-    }
-    .bar.hover-path {
-      background-color: gray !important;
-    }
-    .bar:hover {
-      transform: scale(1.1);
-    }
-    .bar.struck::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: -6px;
-      width: 20px;
-      height: 3px;
-      background-color: red;
-      transform: rotate(45deg);
-    }
-    .bar.struck {
-      background-color: gray;
-    }
-    #turn-indicator {
-      margin-bottom: 20px;
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-    #restart, #undo, #strikeout, #play-computer {
-      margin: 10px;
-      padding: 8px 16px;
-      font-size: 1em;
-      cursor: pointer;
-      border-radius: 4px;
-      border: none;
-      background-color: #007BFF;
-      color: white;
-    }
-    #restart:hover, #undo:hover, #strikeout:hover, #play-computer:hover {
-      background-color: #0056b3;
-    }
-    #help {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #007BFF;
-      color: white;
-      font-size: 20px;
-      border: none;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      cursor: pointer;
-    }
-    #help-dialog {
-      display: none;
-      position: absolute;
-      top: 50px;
-      right: 10px;
-      background: white;
-      border: 1px solid #ccc;
-      padding: 10px;
-      border-radius: 6px;
-      width: 300px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strikethrough</title>
+<meta name="description" content="Strikethrough — a misère matchstick game. Strike consecutive bars; whoever strikes the last one loses.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<style>
+  :root{
+    --felt:#2e4a3f;
+    --felt-deep:#24382f;
+    --ink:#1c2420;
+    --cream:#f3ead6;
+    --cream-dim:#d8ccb0;
+    --wood:#e8c88f;
+    --wood-dark:#c99f5e;
+    --tip:#c6402e;
+    --char:#565450;
+    --char-tip:#2e2c2a;
+    --p1:#e8b84b;
+    --p2:#9fc5e8;
+    --danger:#c6402e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Nunito Sans',system-ui,sans-serif;
+    background:radial-gradient(120% 90% at 50% 0%, var(--felt) 0%, var(--felt-deep) 78%);
+    color:var(--cream);
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 16px 48px;
+  }
+  header{text-align:center;margin-bottom:6px}
+  h1{
+    font-family:'Alfa Slab One',serif;
+    font-size:clamp(2rem,6vw,3.1rem);
+    letter-spacing:.04em;
+    color:var(--cream);
+    position:relative;
+    display:inline-block;
+    line-height:1.1;
+  }
+  h1 .slash{
+    position:absolute;left:-2%;right:-2%;top:54%;height:.13em;
+    background:var(--tip);border-radius:99px;transform:rotate(-2.5deg);
+    box-shadow:0 1px 0 rgba(0,0,0,.25);
+    transform-origin:left center;
+    animation:drawSlash .6s .3s cubic-bezier(.7,0,.3,1) backwards;
+  }
+  @keyframes drawSlash{from{transform:rotate(-2.5deg) scaleX(0)}to{transform:rotate(-2.5deg) scaleX(1)}}
+  .tagline{color:var(--cream-dim);font-size:.9rem;margin-top:6px}
+
+  /* Scoreboard */
+  .scoreboard{
+    display:flex;align-items:center;gap:10px;margin:18px 0 4px;flex-wrap:wrap;justify-content:center;
+  }
+  .chip{
+    display:flex;align-items:center;gap:8px;
+    background:rgba(0,0,0,.22);border:1.5px solid transparent;
+    border-radius:99px;padding:7px 16px;font-weight:700;font-size:.95rem;
+    transition:border-color .25s, box-shadow .25s;
+  }
+  .chip .dot{width:10px;height:10px;border-radius:50%}
+  .chip[data-side="0"] .dot{background:var(--p1)}
+  .chip[data-side="1"] .dot{background:var(--p2)}
+  .chip.active{border-color:var(--cream);box-shadow:0 0 0 3px rgba(243,234,214,.12)}
+  .chip .score{background:rgba(255,255,255,.12);border-radius:8px;padding:1px 9px;font-size:.9rem}
+  .reset-scores{
+    background:none;border:none;color:var(--cream-dim);font-family:inherit;
+    font-size:.78rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px;
+  }
+  .reset-scores:hover{color:var(--cream)}
+
+  /* Turn banner */
+  .turn{
+    margin:10px 0 6px;font-weight:800;font-size:1.15rem;min-height:1.6em;
+    display:flex;align-items:center;gap:9px;
+  }
+  .turn .dot{width:12px;height:12px;border-radius:50%;background:var(--p1);transition:background .3s}
+  .turn.p2 .dot{background:var(--p2)}
+  .turn.thinking{color:var(--cream-dim)}
+
+  /* Computer settings */
+  .settings{
+    display:none;gap:10px;flex-wrap:wrap;justify-content:center;margin:4px 0 6px;
+  }
+  .settings.visible{display:flex}
+  .setting{
+    display:flex;align-items:center;gap:7px;background:rgba(0,0,0,.18);
+    border-radius:10px;padding:6px 10px;font-size:.85rem;color:var(--cream-dim);
+  }
+  .setting select{
+    font-family:inherit;font-size:.85rem;font-weight:700;color:var(--ink);
+    background:var(--cream);border:none;border-radius:7px;padding:4px 8px;cursor:pointer;
+  }
+  .setting select:focus-visible{outline:2px solid var(--p1)}
+
+  /* Board */
+  .board{margin:16px 0 8px;display:flex;flex-direction:column;gap:22px;align-items:center}
+  .row{display:flex;gap:26px}
+  .bar{
+    width:16px;height:76px;border:none;cursor:pointer;position:relative;
+    background:linear-gradient(180deg,var(--tip) 0 16%, var(--wood) 16% 100%);
+    background-clip:padding-box;
+    border-radius:8px;
+    box-shadow:inset -3px 0 4px rgba(0,0,0,.18), 0 3px 5px rgba(0,0,0,.3);
+    transition:transform .18s, opacity .3s, filter .18s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .bar::before{ /* red match head */
+    content:"";position:absolute;top:-2px;left:-2px;right:-2px;height:20px;
+    background:radial-gradient(circle at 35% 30%, #e0604d, var(--tip) 70%);
+    border-radius:10px;
+    box-shadow:inset -2px -2px 3px rgba(0,0,0,.25);
+    transition:background .4s, filter .4s;
+  }
+  .bar:hover:not(.struck):not(.locked){transform:translateY(-5px)}
+  .bar:focus-visible{outline:3px solid var(--p1);outline-offset:3px}
+  .bar.selected{
+    transform:translateY(-9px);
+    filter:drop-shadow(0 0 7px rgba(232,184,75,.85));
+  }
+  .bar.selected::after{
+    content:"";position:absolute;inset:-5px;border:2.5px solid var(--p1);border-radius:12px;
+  }
+  .bar.struck{
+    cursor:default;
+    background:linear-gradient(180deg,var(--char-tip) 0 16%, var(--char) 16% 100%);
+    opacity:.5;transform:rotate(2deg);
+  }
+  .bar.struck::before{
+    background:radial-gradient(circle at 35% 30%, #444, var(--char-tip) 70%);
+    filter:none;
+  }
+  .bar.struck .strike-mark{
+    position:absolute;left:-9px;top:38%;width:34px;height:4px;background:var(--danger);
+    border-radius:99px;transform:rotate(38deg);box-shadow:0 1px 2px rgba(0,0,0,.4);
+    animation:strikeIn .28s cubic-bezier(.7,0,.3,1) backwards;
+  }
+  @keyframes strikeIn{from{transform:rotate(38deg) scaleX(0)}to{transform:rotate(38deg) scaleX(1)}}
+  .bar.locked{cursor:default}
+  .bar.burning{animation:flare .55s ease-out}
+  @keyframes flare{
+    0%{filter:drop-shadow(0 0 2px #ffb347)}
+    35%{filter:drop-shadow(0 0 14px #ff9d2e) brightness(1.5)}
+    100%{filter:none}
+  }
+
+  /* Controls */
+  .controls{display:flex;flex-direction:column;gap:11px;margin-top:20px;width:min(280px,86vw)}
+  .btn{
+    font-family:'Nunito Sans',sans-serif;font-weight:800;font-size:1.02rem;
+    padding:12px 18px;border-radius:12px;border:2px solid transparent;cursor:pointer;
+    transition:transform .12s, filter .15s, background .2s;
+    color:var(--cream);background:rgba(0,0,0,.24);border-color:rgba(243,234,214,.35);
+  }
+  .btn:hover{filter:brightness(1.15)}
+  .btn:active{transform:scale(.97)}
+  .btn:focus-visible{outline:3px solid var(--p1);outline-offset:2px}
+  .btn:disabled{opacity:.45;cursor:default;filter:none;transform:none}
+  .btn.primary{
+    background:var(--tip);border-color:transparent;color:#fff;
+    box-shadow:0 4px 12px rgba(198,64,46,.4);
+  }
+  .btn.primary:hover:not(:disabled){filter:brightness(1.12)}
+
+  /* Toast */
+  .toast{
+    position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:var(--cream);padding:12px 20px;border-radius:12px;
+    font-weight:700;font-size:.93rem;box-shadow:0 8px 24px rgba(0,0,0,.45);
+    opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
+    border-left:5px solid var(--tip);max-width:88vw;text-align:center;z-index:60;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* Winner overlay */
+  .overlay{
+    position:fixed;inset:0;background:rgba(20,28,24,.72);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;z-index:50;padding:16px;
+  }
+  .overlay.show{display:flex}
+  .card{
+    background:var(--cream);color:var(--ink);border-radius:18px;padding:34px 34px 28px;
+    max-width:380px;width:100%;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    animation:pop .35s cubic-bezier(.5,1.6,.5,1) backwards;
+  }
+  @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+  .card h2{font-family:'Alfa Slab One',serif;font-size:1.7rem;margin-bottom:8px}
+  .card p{color:#5a5648;margin-bottom:22px;font-size:.97rem}
+  .card .btn{width:100%;background:var(--tip);border:none;color:#fff}
+
+  footer{margin-top:auto;padding-top:30px;color:rgba(243,234,214,.4);font-size:.75rem}
+
+  /* ---- Online play ---- */
+  .online-card{
+    background:var(--cream);color:var(--ink);border-radius:18px;
+    max-width:420px;width:100%;padding:30px 30px 24px;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    animation:pop .35s cubic-bezier(.5,1.6,.5,1) backwards;
+  }
+  .online-card h2{font-family:'Alfa Slab One',serif;font-size:1.55rem;margin-bottom:6px}
+  .online-card .sub{color:#5a5648;font-size:.9rem;margin-bottom:20px}
+  .online-card .btn{width:100%;margin-top:10px}
+  .online-card .btn.host{background:var(--tip);border:none;color:#fff}
+  .online-card .btn.ghost{background:#fff;border:2px solid #d8ccb0;color:var(--ink)}
+  .online-card .btn.ghost:hover{filter:none;background:#f7f2e4}
+  .join-row{display:flex;gap:8px;margin-top:10px}
+  .join-row input{
+    flex:1;min-width:0;font-family:'Nunito Sans',sans-serif;font-weight:800;font-size:1.05rem;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+    border:2px solid #d8ccb0;border-radius:12px;padding:11px 8px;background:#fff;color:var(--ink);
+  }
+  .join-row input:focus-visible{outline:3px solid var(--p1);border-color:transparent}
+  .join-row .btn{width:auto;margin-top:0;background:var(--ink);border:none;color:#fff;flex-shrink:0}
+  .room-code{
+    font-family:'Alfa Slab One',serif;font-size:2.2rem;letter-spacing:.25em;
+    background:var(--ink);color:var(--cream);border-radius:14px;
+    padding:14px 10px 12px;margin:14px 0 8px;user-select:all;
+  }
+  .online-status{font-size:.88rem;color:#5a5648;min-height:1.4em;margin-top:10px}
+  .online-status.waiting::after{content:"…";animation:dots 1.2s steps(4) infinite}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+  .online-card .back-link{
+    background:none;border:none;color:#8a8474;font-family:inherit;font-weight:700;
+    font-size:.85rem;cursor:pointer;margin-top:14px;text-decoration:underline;text-underline-offset:3px;
+  }
+  .online-pill{
+    display:none;align-items:center;gap:7px;background:rgba(0,0,0,.22);
+    border-radius:99px;padding:5px 14px;font-size:.8rem;font-weight:700;color:var(--cream-dim);
+  }
+  .online-pill.visible{display:flex}
+  .online-pill .live-dot{width:8px;height:8px;border-radius:50%;background:#4caf6e;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---- How to Play ---- */
+  .help-btn{
+    position:fixed;top:14px;right:14px;z-index:40;
+    width:42px;height:42px;border-radius:50%;border:2px solid rgba(243,234,214,.4);
+    background:rgba(0,0,0,.25);color:var(--cream);font-family:'Alfa Slab One',serif;
+    font-size:1.15rem;cursor:pointer;transition:filter .15s, transform .12s;
+  }
+  .help-btn:hover{filter:brightness(1.3)}
+  .help-btn:active{transform:scale(.94)}
+  .help-btn:focus-visible{outline:3px solid var(--p1);outline-offset:2px}
+
+  .rules-card{
+    background:var(--cream);color:var(--ink);border-radius:18px;
+    max-width:520px;width:100%;max-height:88vh;overflow-y:auto;
+    padding:30px 30px 24px;text-align:left;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    animation:pop .35s cubic-bezier(.5,1.6,.5,1) backwards;
+  }
+  .rules-card h2{font-family:'Alfa Slab One',serif;font-size:1.55rem;margin-bottom:16px;text-align:center}
+  .rules-card h3{font-size:1rem;font-weight:800;margin:20px 0 8px;letter-spacing:.02em}
+  .rules-card ol{margin:0 0 4px 20px;color:#42403a;font-size:.95rem;line-height:1.65}
+  .rules-card ol li{margin-bottom:8px}
+  .rules-card ol b{color:var(--ink)}
+  .rules-card .kbd{
+    display:inline-block;background:var(--tip);color:#fff;font-weight:800;font-size:.8rem;
+    border-radius:7px;padding:2px 9px;vertical-align:1px;
+  }
+  .rules-card .btn{width:100%;background:var(--tip);border:none;color:#fff;margin-top:18px}
+
+  .example{
+    display:flex;align-items:center;gap:14px;
+    background:#fff;border:1.5px solid #e4dcc6;border-radius:13px;
+    padding:12px 14px;margin-bottom:10px;
+  }
+  .example .verdict{
+    flex-shrink:0;width:30px;height:30px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:1rem;color:#fff;
+  }
+  .example.good .verdict{background:#3e8e5a}
+  .example.bad .verdict{background:var(--danger)}
+  .example .demo{flex-shrink:0;display:flex;flex-direction:column;gap:7px;align-items:center}
+  .example .caption{font-size:.87rem;color:#42403a;line-height:1.45}
+  .example .caption b{color:var(--ink)}
+
+  .mrow{display:flex;gap:9px}
+  .mbar{
+    width:8px;height:34px;border-radius:4px;position:relative;
+    background:linear-gradient(180deg,var(--tip) 0 20%, var(--wood) 20% 100%);
+  }
+  .mbar.sel{outline:2px solid var(--p1);outline-offset:2px;transform:translateY(-3px)}
+  .mbar.out{background:linear-gradient(180deg,var(--char-tip) 0 20%, var(--char) 20% 100%);opacity:.55}
+  .mbar.out::after{
+    content:"";position:absolute;left:-5px;top:40%;width:18px;height:2.5px;
+    background:var(--danger);border-radius:99px;transform:rotate(38deg);
+  }
+
+  /* ---- Position hint ---- */
+  .hint-panel{
+    display:none;
+    margin:4px auto 2px;
+    width:min(320px,90vw);
+    border-radius:11px;
+    padding:10px 14px;
+    font-size:.85rem;
+    line-height:1.5;
+    transition:background .35s, border-color .35s;
+    border:1.5px solid transparent;
+  }
+  .hint-panel.visible{display:block}
+  .hint-panel.winning{
+    background:rgba(62,142,90,.18);border-color:rgba(62,142,90,.45);
+  }
+  .hint-panel.losing{
+    background:rgba(198,64,46,.15);border-color:rgba(198,64,46,.4);
+  }
+  .hint-panel.unknown{
+    background:rgba(243,234,214,.07);border-color:rgba(243,234,214,.2);
+  }
+  .hint-row{display:flex;align-items:flex-start;gap:9px}
+  .hint-icon{font-size:1.2rem;line-height:1;flex-shrink:0;margin-top:1px}
+  .hint-title{font-weight:800;margin-bottom:2px;font-size:.9rem}
+  .hint-body{color:var(--cream-dim);font-size:.82rem}
+
+  @media (max-width:430px){
+    .row{gap:18px}
+    .bar{width:14px;height:64px}
+    .bar.struck .strike-mark{left:-8px;width:30px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none !important;transition:none !important}
+  }
+</style>
 </head>
 <body>
-  <button id="help">?</button>
-  <div id="help-dialog">
-    <strong>How to Play:</strong>
-    <ul>
-      <li>Click bars to select them (they turn gray).</li>
-      <li>Only consecutive bars in the same row can be struck.</li>
-      <li>Click <strong>Strike Out</strong> to confirm your move.</li>
-      <li>The player who strikes the last bar <strong>loses</strong>.</li>
-      <li>Use <strong>Play with Computer</strong> to challenge the system.</li>
-    </ul>
+
+<button class="help-btn" id="helpBtn" aria-label="How to play" title="How to play">?</button>
+
+<header>
+  <h1>STRIKETHROUGH<span class="slash" aria-hidden="true"></span></h1>
+  <p class="tagline">Strike consecutive bars in a row. Whoever strikes the last one loses.</p>
+</header>
+
+<div class="scoreboard" aria-label="Score">
+  <div class="chip" data-side="0" id="chip0"><span class="dot"></span><span id="name0">Player 1</span><span class="score" id="score0">0</span></div>
+  <div class="chip" data-side="1" id="chip1"><span class="dot"></span><span id="name1">Player 2</span><span class="score" id="score1">0</span></div>
+  <button class="reset-scores" id="resetScores">Reset scores</button>
+  <div class="online-pill" id="onlinePill"><span class="live-dot"></span><span id="onlinePillText">Room ABC123</span></div>
+</div>
+
+<div class="settings" id="settings">
+  <label class="setting">Difficulty
+    <select id="difficulty">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard (unbeatable)</option>
+    </select>
+  </label>
+  <label class="setting">First move
+    <select id="firstMove">
+      <option value="human" selected>You</option>
+      <option value="computer">Computer</option>
+    </select>
+  </label>
+</div>
+
+<div class="turn" id="turnBanner"><span class="dot"></span><span id="turnText">Player 1's turn</span></div>
+
+<div class="hint-panel" id="hintPanel" aria-live="polite">
+  <div class="hint-row">
+    <span class="hint-icon" id="hintIcon">🧠</span>
+    <div>
+      <div class="hint-title" id="hintTitle"></div>
+      <div class="hint-body" id="hintBody"></div>
+    </div>
   </div>
+</div>
 
-  <div id="turn-indicator">Player 1's Turn</div>
-  <div class="game-board" id="gameBoard"></div>
-  <button id="undo">Undo Last Move</button>
-  <button id="strikeout">Strike Out</button>
-  <button id="restart">Restart Game</button>
-  <button id="play-computer">Play with Computer</button>
+<main class="board" id="board" aria-label="Game board"></main>
 
-  <script>
-    const structure = [1, 2, 3, 4, 5];
-    const gameBoard = document.getElementById('gameBoard');
-    const turnIndicator = document.getElementById('turn-indicator');
-    const restartBtn = document.getElementById('restart');
-    const undoBtn = document.getElementById('undo');
-    const strikeoutBtn = document.getElementById('strikeout');
-    const playComputerBtn = document.getElementById('play-computer');
-    const helpBtn = document.getElementById('help');
-    const helpDialog = document.getElementById('help-dialog');
+<div class="controls">
+  <button class="btn primary" id="strikeBtn">Strike Out</button>
+  <button class="btn" id="undoBtn">Undo Last Move</button>
+  <button class="btn" id="restartBtn">Restart Game</button>
+  <button class="btn" id="modeBtn">Play with Computer</button>
+  <button class="btn" id="onlineBtn">🌐 Play Online</button>
+  <button class="btn" id="rulesBtn">How to Play</button>
+  <button class="btn" id="hintBtn">💡 Show Position Hint</button>
+</div>
 
-    let currentPlayer = 1;
-    let lastMove = [];
-    let playWithComputer = false;
+<div class="overlay" id="rulesOverlay">
+  <div class="rules-card" role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
+    <h2 id="rulesTitle">How to Play</h2>
 
-    function getUnstruckSegments(row) {
-      const bars = Array.from(row.querySelectorAll('.bar'));
-      const segments = [];
-      let current = [];
-      for (const bar of bars) {
-        if (!bar.classList.contains('struck')) {
-          current.push(bar);
-        } else if (current.length) {
-          segments.push(current);
-          current = [];
-        }
-      }
-      if (current.length) segments.push(current);
-      return segments;
-    }
+    <ol>
+      <li><b>Tap bars to pick them up.</b> Picked bars lift and glow amber. Tap again to put one back.</li>
+      <li><b>Click <span class="kbd">Strike Out</span></b> to strike the picked bars. They burn out with a red slash and can't be used again.</li>
+      <li><b>Take turns.</b> On your turn you must strike at least one bar. You may strike as many as you like — but they must all be <b>side by side in the same row</b>.</li>
+      <li><b>Whoever strikes the very last bar loses.</b> Force your opponent into taking it!</li>
+    </ol>
 
-    function selectContiguousBars(row, count) {
-      const segments = getUnstruckSegments(row);
-      if (segments.length === 0) return [];
-      let segment = segments.find(seg => seg.length >= count);
-      if (!segment) {
-        segment = segments.reduce((a, b) => b.length > a.length ? b : a, segments[0]);
-        count = Math.min(count, segment.length);
-      }
-      return segment.slice(0, count);
-    }
+    <h3>What's allowed — and what isn't</h3>
 
-    function buildBoard() {
-      gameBoard.innerHTML = '';
-      structure.forEach((count, rowIndex) => {
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.dataset.row = rowIndex;
+    <div class="example good">
+      <span class="verdict" aria-label="Allowed">✓</span>
+      <span class="demo"><span class="mrow"><span class="mbar sel"></span><span class="mbar sel"></span><span class="mbar"></span><span class="mbar"></span><span class="mbar"></span></span></span>
+      <span class="caption"><b>Neighbours in one row.</b> Any run of side-by-side bars — one, two, or the whole row.</span>
+    </div>
 
-        for (let i = 0; i < count; i++) {
-          const bar = document.createElement('div');
-          bar.className = 'bar';
-          bar.dataset.row = rowIndex;
-          bar.dataset.index = i;
+    <div class="example good">
+      <span class="verdict" aria-label="Allowed">✓</span>
+      <span class="demo"><span class="mrow"><span class="mbar"></span><span class="mbar sel"></span><span class="mbar sel"></span><span class="mbar"></span><span class="mbar"></span></span></span>
+      <span class="caption"><b>Striking in the middle is fine.</b> It splits the row into two separate groups for later turns.</span>
+    </div>
 
-          bar.addEventListener('click', () => toggleGray(bar));
-          row.appendChild(bar);
-        }
-        gameBoard.appendChild(row);
-      });
-    }
+    <div class="example bad">
+      <span class="verdict" aria-label="Not allowed">✗</span>
+      <span class="demo"><span class="mrow"><span class="mbar sel"></span><span class="mbar"></span><span class="mbar sel"></span><span class="mbar"></span><span class="mbar"></span></span></span>
+      <span class="caption"><b>No gaps.</b> 1st and 3rd bar with the 2nd left standing — the bars must touch.</span>
+    </div>
 
-    function toggleGray(clickedBar) {
-      if (clickedBar.classList.contains('struck')) return;
-      clickedBar.classList.toggle('hover-path');
-    }
+    <div class="example bad">
+      <span class="verdict" aria-label="Not allowed">✗</span>
+      <span class="demo"><span class="mrow"><span class="mbar sel"></span><span class="mbar out"></span><span class="mbar sel"></span><span class="mbar"></span><span class="mbar"></span></span></span>
+      <span class="caption"><b>No jumping over struck bars.</b> A burnt bar breaks the row — the bars on either side of it are no longer neighbours.</span>
+    </div>
 
-    function strikeOutBars() {
-      const bars = document.querySelectorAll('.bar.hover-path');
-      if (bars.length === 0) return;
+    <div class="example bad">
+      <span class="verdict" aria-label="Not allowed">✗</span>
+      <span class="demo">
+        <span class="mrow"><span class="mbar sel"></span><span class="mbar"></span><span class="mbar"></span></span>
+        <span class="mrow"><span class="mbar"></span><span class="mbar sel"></span><span class="mbar"></span><span class="mbar"></span></span>
+      </span>
+      <span class="caption"><b>One row per turn.</b> You can't mix bars from different rows in a single strike.</span>
+    </div>
 
-      const row = bars[0].dataset.row;
-      const indices = Array.from(bars).map(b => parseInt(b.dataset.index)).sort((a, b) => a - b);
-      const isSameRow = Array.from(bars).every(b => b.dataset.row === row);
-      const isConsecutive = indices.every((val, i, arr) => i === 0 || val === arr[i - 1] + 1);
+    <button class="btn" id="rulesCloseBtn">Got it — let's play</button>
+  </div>
+</div>
 
-      if (!isSameRow || !isConsecutive) {
-        alert('Only consecutive bars in the same row can be struck.');
-        bars.forEach(bar => bar.classList.remove('hover-path'));
-        return;
-      }
+<div class="toast" id="toast" role="alert"></div>
 
-      lastMove = [];
-      bars.forEach(bar => {
-        bar.classList.remove('hover-path');
-        bar.classList.add('struck');
-        lastMove.push(bar);
-      });
-      navigator.vibrate?.(100);
-      checkGameOver();
-      switchPlayer();
+<div class="overlay" id="onlineOverlay">
+  <div class="online-card" role="dialog" aria-modal="true" aria-labelledby="onlineTitle">
+    <!-- Menu view -->
+    <div id="onlineMenu">
+      <h2 id="onlineTitle">Play Online</h2>
+      <p class="sub">Play with a friend on another device. One of you creates a room, the other joins with the code.</p>
+      <button class="btn host" id="createRoomBtn">Create a Room</button>
+      <div class="join-row">
+        <input id="joinCodeInput" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Room code">
+        <button class="btn" id="joinRoomBtn">Join</button>
+      </div>
+      <div class="online-status" id="onlineMenuStatus"></div>
+      <button class="back-link" id="onlineCancelBtn">Cancel</button>
+    </div>
+    <!-- Hosting view -->
+    <div id="onlineHost" style="display:none">
+      <h2>Room Created</h2>
+      <p class="sub">Share this code with your friend — they enter it on their device under "Play Online".</p>
+      <div class="room-code" id="roomCodeDisplay">------</div>
+      <button class="btn ghost" id="copyCodeBtn">Copy Code</button>
+      <div class="online-status waiting" id="hostStatus">Waiting for your friend to join</div>
+      <button class="back-link" id="hostCancelBtn">Cancel room</button>
+    </div>
+  </div>
+</div>
 
-      if (playWithComputer && currentPlayer === 2) {
-        setTimeout(computerPlay, 1000);
-      }
-    }
+<div class="overlay" id="overlay">
+  <div class="card">
+    <h2 id="winTitle">Player 1 wins!</h2>
+    <p id="winDetail">Player 2 struck the last bar.</p>
+    <button class="btn" id="nextRoundBtn">Next Round</button>
+  </div>
+</div>
 
-    function updateTurnIndicator() {
-      const isComputerTurn = playWithComputer && currentPlayer === 2;
-      const playerText = isComputerTurn ? 'Computer' : `Player ${currentPlayer}`;
-      const suffix = playWithComputer && !isComputerTurn ? ' (vs Computer)' : '';
-      turnIndicator.textContent = `${playerText}'s Turn${suffix}`;
-    }
+<footer>Strikethrough · a misère matchstick game</footer>
 
-    function switchPlayer() {
-      currentPlayer = currentPlayer === 1 ? 2 : 1;
-      updateTurnIndicator();
-    }
+<script>
+(() => {
+  "use strict";
 
-    function checkGameOver() {
-      const bars = document.querySelectorAll('.bar');
-      const remaining = Array.from(bars).filter(bar => !bar.classList.contains('struck'));
-      if (remaining.length === 0) {
-        const loser = playWithComputer && currentPlayer === 2 ? 'Computer' : `Player ${currentPlayer}`;
-        alert(`Game over! ${loser} loses.`);
-      }
-    }
+  /* ---------------- Game state ---------------- */
+  const ROW_SIZES = [1, 2, 3, 4, 5];
+  const OFFSETS = [0, 1, 3, 6, 10];           // bit offset of each row
+  const TOTAL_BITS = 15;
+  const FULL_MASK = (1 << TOTAL_BITS) - 1;
 
-    function computerPlay() {
-      const rows = document.querySelectorAll('.row');
-      const counts = Array.from(rows).map(row =>
-        Array.from(row.querySelectorAll('.bar'))
-          .filter(b => !b.classList.contains('struck')).length);
-      const nimSum = counts.reduce((a, b) => a ^ b, 0);
-      const rowsWithMoreThanOne = counts.filter(c => c > 1).length;
-      const rowsWithOne = counts.filter(c => c === 1).length;
+  let struck = [];            // struck[r][i] = true if bar struck
+  let selected = new Set();   // "r-i" keys of currently selected bars
+  let turn = 0;               // 0 = Player 1 / You, 1 = Player 2 / Computer
+  let history = [];           // snapshots for undo: {struck, turn}
+  let gameOver = false;
+  let mode = "pvp";           // "pvp" | "pvc"
+  let scores = [0, 0];
+  let computerThinking = false;
+  let hintVisible = false;
+  // Online play
+  let peer = null;            // PeerJS instance
+  let conn = null;            // data connection to the other player
+  let myIndex = 0;            // 0 = host (Player 1), 1 = guest (Player 2)
+  let onlineActive = false;   // true once both players are connected
 
-      // Misère Nim special cases
-      if (counts.every(c => c <= 1)) {
-        for (let r = 0; r < counts.length; r++) {
-          if (counts[r] === 1) {
-            const bar = Array.from(rows[r].querySelectorAll('.bar'))
-              .find(b => !b.classList.contains('struck'));
-            if (bar) {
-              bar.classList.add('struck');
-              lastMove = [bar];
-              checkGameOver();
-              switchPlayer();
-              return;
-            }
+  const $ = id => document.getElementById(id);
+  const boardEl = $("board");
+
+  /* ---------------- Solver (exact, memoized) ----------------
+     mask bit = 1 means the bar is still standing.
+     winCache[mask] = 1 if the player TO MOVE wins with best play (misère). */
+  const winCache = new Int8Array(1 << TOTAL_BITS).fill(-1);
+
+  function movesOf(mask) {
+    const moves = [];
+    for (let r = 0; r < 5; r++) {
+      const size = ROW_SIZES[r], off = OFFSETS[r];
+      let i = 0;
+      while (i < size) {
+        if (!(mask >> (off + i) & 1)) { i++; continue; }
+        let j = i;                                   // run [i..j] of standing bars
+        while (j + 1 < size && (mask >> (off + j + 1) & 1)) j++;
+        for (let a = i; a <= j; a++) {
+          let m = 0;
+          for (let b = a; b <= j; b++) {
+            m |= 1 << (off + b);
+            moves.push(m);
           }
         }
-        // No available move means the game is already over
-        return;
-      } else if (rowsWithMoreThanOne === 1) {
-        const r = counts.findIndex(c => c > 1);
-        const target = rowsWithOne % 2 === 0 ? 1 : 0;
-        const toStrike = counts[r] - target;
-        const selected = selectContiguousBars(rows[r], toStrike);
-        selected.forEach(b => b.classList.add('struck'));
-        lastMove = [...selected];
-        checkGameOver();
-        switchPlayer();
-        return;
+        i = j + 1;
       }
+    }
+    return moves;
+  }
 
-      // Normal Nim fallback
-      if (nimSum === 0) {
-        for (const row of rows) {
-          const bars = Array.from(row.querySelectorAll('.bar'));
-          const unstruck = bars.filter(b => !b.classList.contains('struck'));
-          if (unstruck.length > 0) {
-            unstruck[0].classList.add('struck');
-            lastMove = [unstruck[0]];
-            checkGameOver();
-            switchPlayer();
-            return;
-          }
-        }
+  function wins(mask) {
+    if (mask === 0) return 1;                        // opponent struck last bar
+    if (winCache[mask] !== -1) return winCache[mask];
+    let w = 0;
+    for (const m of movesOf(mask)) {
+      if (!wins(mask & ~m)) { w = 1; break; }
+    }
+    winCache[mask] = w;
+    return w;
+  }
+
+  function currentMask() {
+    let mask = 0;
+    for (let r = 0; r < 5; r++)
+      for (let i = 0; i < ROW_SIZES[r]; i++)
+        if (!struck[r][i]) mask |= 1 << (OFFSETS[r] + i);
+    return mask;
+  }
+
+  function popcount(m){ let c = 0; while (m) { m &= m - 1; c++; } return c; }
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  function chooseComputerMove() {
+    const mask = currentMask();
+    const moves = movesOf(mask);
+    const diff = $("difficulty").value;
+    const optimal = () => {
+      const winning = moves.filter(m => !wins(mask & ~m));
+      if (winning.length) return pick(winning);
+      const singles = moves.filter(m => popcount(m) === 1);   // losing: stall, invite mistakes
+      return singles.length ? pick(singles) : pick(moves);
+    };
+    if (diff === "hard") return optimal();
+    if (diff === "medium") return Math.random() < 0.7 ? optimal() : pick(moves);
+    return pick(moves);
+  }
+
+  /* ---------------- Rendering ---------------- */
+  function buildBoard() {
+    boardEl.innerHTML = "";
+    for (let r = 0; r < 5; r++) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "row";
+      for (let i = 0; i < ROW_SIZES[r]; i++) {
+        const bar = document.createElement("button");
+        bar.className = "bar";
+        bar.dataset.r = r;
+        bar.dataset.i = i;
+        bar.setAttribute("aria-label", `Row ${r + 1}, bar ${i + 1}`);
+        bar.addEventListener("click", () => onBarClick(r, i));
+        rowEl.appendChild(bar);
+      }
+      boardEl.appendChild(rowEl);
+    }
+  }
+
+  function render() {
+    for (const bar of boardEl.querySelectorAll(".bar")) {
+      const r = +bar.dataset.r, i = +bar.dataset.i;
+      const key = r + "-" + i;
+      const isStruck = struck[r][i];
+      bar.classList.toggle("struck", isStruck);
+      bar.classList.toggle("selected", selected.has(key));
+      bar.classList.toggle("locked", gameOver || computerThinking ||
+        (mode === "pvc" && turn === 1) || (mode === "online" && turn !== myIndex));
+      if (isStruck && !bar.querySelector(".strike-mark")) {
+        const mark = document.createElement("span");
+        mark.className = "strike-mark";
+        bar.appendChild(mark);
+      }
+      if (!isStruck) bar.querySelector(".strike-mark")?.remove();
+    }
+    // turn banner
+    const banner = $("turnBanner");
+    banner.classList.toggle("p2", turn === 1);
+    banner.classList.toggle("thinking", computerThinking);
+    $("turnText").textContent = computerThinking
+      ? "Computer is thinking…"
+      : `${playerName(turn)}'s turn`;
+    // scoreboard
+    $("chip0").classList.toggle("active", turn === 0 && !gameOver);
+    $("chip1").classList.toggle("active", turn === 1 && !gameOver);
+    $("name0").textContent = mode === "online" ? (myIndex === 0 ? "You" : "Friend")
+                            : mode === "pvc" ? "You" : "Player 1";
+    $("name1").textContent = mode === "online" ? (myIndex === 1 ? "You" : "Friend")
+                            : mode === "pvc" ? "Computer" : "Player 2";
+    $("score0").textContent = scores[0];
+    $("score1").textContent = scores[1];
+    // controls
+    const humanTurn = !(mode === "pvc" && turn === 1) && !(mode === "online" && turn !== myIndex);
+    $("strikeBtn").disabled = gameOver || computerThinking || !humanTurn;
+    $("undoBtn").disabled = history.length === 0 || computerThinking || gameOver || mode === "online";
+    $("modeBtn").textContent = mode === "online" ? "Leave Online Room"
+                             : mode === "pvp" ? "Play with Computer" : "Play with a Friend";
+    $("settings").classList.toggle("visible", mode === "pvc");
+    $("onlinePill").classList.toggle("visible", mode === "online" && onlineActive);
+    updateHint();
+  }
+
+  function playerName(p) {
+    if (mode === "online") return p === myIndex ? "You" : "Friend";
+    return mode === "pvc" ? (p === 0 ? "You" : "Computer") : `Player ${p + 1}`;
+  }
+
+  /* ---------------- Position hint ---------------- */
+  function updateHint() {
+    const panel = $("hintPanel");
+    // Only show when toggled on, not game over, not computer thinking
+    if (!hintVisible || gameOver || computerThinking) {
+      panel.classList.remove("visible","winning","losing","unknown");
+      return;
+    }
+    const mask = currentMask();
+    const remaining = popcount(mask);
+    const youWin = wins(mask);   // 1 = current mover wins with best play
+
+    const mover = playerName(turn);
+    const opponent = playerName(1 - turn);
+
+    panel.classList.add("visible");
+    panel.classList.toggle("winning", !!youWin);
+    panel.classList.toggle("losing", !youWin);
+    panel.classList.remove("unknown");
+
+    const movesAvailable = movesOf(mask);
+    const winningMoves = movesAvailable.filter(m => !wins(mask & ~m));
+
+    if (remaining === 0) return;
+
+    if (youWin) {
+      $("hintIcon").textContent = "🟢";
+      $("hintTitle").textContent = `${mover} is in a winning position`;
+      if (winningMoves.length === 1) {
+        const m = winningMoves[0];
+        const cnt = popcount(m);
+        let r = 0;
+        for (let i = 0; i < 5; i++) if ((m >> OFFSETS[i]) & ((1 << ROW_SIZES[i]) - 1)) { r = i; break; }
+        $("hintBody").textContent =
+          `There's exactly one best move: strike ${cnt === 1 ? "1 bar" : cnt + " consecutive bars"} from row ${r + 1}. ` +
+          `After that, every position left will be a losing one for ${opponent}.`;
       } else {
-        for (let r = 0; r < counts.length; r++) {
-          const totalRow = counts[r];
-          const target = totalRow ^ nimSum;
-          if (target < totalRow) {
-            const toStrike = totalRow - target;
-            const selected = selectContiguousBars(rows[r], toStrike);
-            selected.forEach(b => b.classList.add('struck'));
-            lastMove = [...selected];
-            checkGameOver();
-            switchPlayer();
-            return;
-          }
-        }
+        $("hintBody").textContent =
+          `There are ${winningMoves.length} winning moves available. ` +
+          `Any of them puts ${opponent} in a losing position — they can't escape with perfect play.`;
+      }
+    } else {
+      $("hintIcon").textContent = "🔴";
+      $("hintTitle").textContent = `${mover} is in a losing position`;
+      const allSingles = movesAvailable.every(m => popcount(m) === 1);
+      if (remaining === 1) {
+        $("hintBody").textContent =
+          `Only 1 bar left and it's ${mover}'s turn — they must take it and lose. ${opponent} forced this.`;
+      } else if (allSingles) {
+        $("hintBody").textContent =
+          `Every move ${mover} makes leaves ${opponent} in a winning position. ` +
+          `Best bet: take single bars and hope ${opponent} makes a mistake.`;
+      } else {
+        $("hintBody").textContent =
+          `No matter what ${mover} strikes, ${opponent} can always respond to maintain the advantage. ` +
+          `Try striking in the middle to split rows and create a more complex position.`;
       }
     }
+  }
 
+  /* ---------------- Toast ---------------- */
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
 
-    restartBtn.addEventListener('click', () => {
-      currentPlayer = 1;
-      playWithComputer = false;
-      updateTurnIndicator();
-      buildBoard();
+  /* ---------------- Interaction ---------------- */
+  function onBarClick(r, i) {
+    if (gameOver || computerThinking) return;
+    if (mode === "pvc" && turn === 1) return;
+    if (mode === "online" && turn !== myIndex) return;
+    if (struck[r][i]) return;
+    const key = r + "-" + i;
+    selected.has(key) ? selected.delete(key) : selected.add(key);
+    render();
+  }
+
+  function validateSelection() {
+    if (selected.size === 0) return "Select at least one bar first.";
+    const items = [...selected].map(k => k.split("-").map(Number));
+    const rows = new Set(items.map(([r]) => r));
+    if (rows.size > 1) return "Only consecutive bars in the same row can be struck.";
+    const idx = items.map(([, i]) => i).sort((a, b) => a - b);
+    for (let k = 1; k < idx.length; k++)
+      if (idx[k] !== idx[k - 1] + 1)
+        return "Only consecutive bars in the same row can be struck.";
+    return null;
+  }
+
+  function snapshot() {
+    history.push({ struck: struck.map(row => row.slice()), turn });
+  }
+
+  function applyStrike(cells, fromRemote = false) {  // cells = [[r,i], ...]
+    if (mode === "online" && !fromRemote && conn?.open) {
+      conn.send({ type: "strike", cells });
+    }
+    snapshot();
+    for (const [r, i] of cells) {
+      struck[r][i] = true;
+      const bar = boardEl.querySelector(`.bar[data-r="${r}"][data-i="${i}"]`);
+      bar?.classList.add("burning");
+      setTimeout(() => bar?.classList.remove("burning"), 600);
+    }
+    selected.clear();
+    const striker = turn;
+    if (currentMask() === 0) {
+      endRound(striker);
+    } else {
+      turn = 1 - turn;
+      render();
+      if (mode === "pvc" && turn === 1) scheduleComputer();
+    }
+  }
+
+  function endRound(loser) {
+    gameOver = true;
+    const winner = 1 - loser;
+    scores[winner]++;
+    render();
+    $("winTitle").textContent = `${playerName(winner)} win${winner === 0 && mode === "pvc" ? "" : "s"}!`;
+    $("winDetail").textContent = `${playerName(loser)} struck the last bar.`;
+    setTimeout(() => $("overlay").classList.add("show"), 650);
+  }
+
+  function scheduleComputer() {
+    computerThinking = true;
+    render();
+    setTimeout(() => {
+      const move = chooseComputerMove();
+      // show the computer's selection briefly
+      const cells = [];
+      for (let b = 0; b < TOTAL_BITS; b++) {
+        if (move >> b & 1) {
+          let r = 0;
+          while (r < 4 && OFFSETS[r + 1] <= b) r++;
+          cells.push([r, b - OFFSETS[r]]);
+        }
+      }
+      for (const [r, i] of cells) selected.add(r + "-" + i);
+      computerThinking = false;
+      render();
+      computerThinking = true;             // keep controls locked during the pause
+      setTimeout(() => {
+        computerThinking = false;
+        selected.clear();
+        applyStrike(cells);
+      }, 700);
+    }, 650);
+  }
+
+  /* ---------------- Buttons ---------------- */
+  $("strikeBtn").addEventListener("click", () => {
+    if (gameOver || computerThinking) return;
+    const err = validateSelection();
+    if (err) { toast(err); return; }
+    applyStrike([...selected].map(k => k.split("-").map(Number)));
+  });
+
+  $("undoBtn").addEventListener("click", () => {
+    if (!history.length || computerThinking || gameOver) return;
+    let snap = history.pop();
+    // In computer mode, also rewind the computer's reply so it's your turn again
+    if (mode === "pvc" && snap.turn === 1 && history.length) snap = history.pop();
+    struck = snap.struck.map(row => row.slice());
+    turn = snap.turn;
+    selected.clear();
+    render();
+    if (mode === "pvc" && turn === 1) scheduleComputer();  // undid back to a computer turn
+  });
+
+  $("restartBtn").addEventListener("click", () => {
+    if (mode === "online" && conn?.open) conn.send({ type: "restart" });
+    startRound();
+  });
+  $("nextRoundBtn").addEventListener("click", () => {
+    $("overlay").classList.remove("show");
+    if (mode === "online" && conn?.open) conn.send({ type: "restart" });
+    startRound();
+  });
+
+  $("modeBtn").addEventListener("click", () => {
+    if (mode === "online") { leaveOnline("You left the room."); return; }
+    mode = mode === "pvp" ? "pvc" : "pvp";
+    scores = [0, 0];
+    hintVisible = false;
+    $("hintBtn").textContent = "💡 Show Position Hint";
+    startRound();
+  });
+
+  /* ---------------- Online play (WebRTC via PeerJS) ---------------- */
+  const ICE_CONFIG = {
+    iceServers: [
+      { urls: "stun:stun.relay.metered.ca:80" },
+      { urls: "turn:global.relay.metered.ca:80",
+        username: "5c92d6fa10ea80eae7e2d0cf", credential: "Aj9bBg0ktYz+ewsO" },
+      { urls: "turn:global.relay.metered.ca:80?transport=tcp",
+        username: "5c92d6fa10ea80eae7e2d0cf", credential: "Aj9bBg0ktYz+ewsO" },
+      { urls: "turn:global.relay.metered.ca:443",
+        username: "5c92d6fa10ea80eae7e2d0cf", credential: "Aj9bBg0ktYz+ewsO" },
+      { urls: "turns:global.relay.metered.ca:443?transport=tcp",
+        username: "5c92d6fa10ea80eae7e2d0cf", credential: "Aj9bBg0ktYz+ewsO" },
+    ],
+  };
+  const ROOM_PREFIX = "strkthru-";
+  let currentRoomCode = "";
+  const onlineOverlay = $("onlineOverlay");
+
+  function randomCode() {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";  // no confusing 0/O, 1/I/L
+    let c = "";
+    for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+    return c;
+  }
+
+  function showOnlineView(view) {          // "menu" | "host"
+    $("onlineMenu").style.display = view === "menu" ? "block" : "none";
+    $("onlineHost").style.display = view === "host" ? "block" : "none";
+  }
+
+  function openOnlineModal() {
+    $("onlineMenuStatus").textContent = "";
+    $("joinCodeInput").value = "";
+    showOnlineView("menu");
+    onlineOverlay.classList.add("show");
+  }
+  function closeOnlineModal() { onlineOverlay.classList.remove("show"); }
+
+  function destroyPeer() {
+    try { conn?.close(); } catch (e) {}
+    try { peer?.destroy(); } catch (e) {}
+    conn = null; peer = null;
+  }
+
+  function leaveOnline(message) {
+    if (conn?.open) { try { conn.send({ type: "leave" }); } catch (e) {} }
+    destroyPeer();
+    onlineActive = false;
+    mode = "pvp";
+    scores = [0, 0];
+    startRound();
+    if (message) toast(message);
+  }
+
+  function wireConnection(c) {
+    conn = c;
+    conn.on("data", handleMessage);
+    conn.on("close", () => { if (onlineActive) leaveOnline("Your friend disconnected."); });
+    conn.on("error", () => { if (onlineActive) leaveOnline("Connection lost."); });
+  }
+
+  function startOnlineMatch() {
+    onlineActive = true;
+    mode = "online";
+    scores = [0, 0];
+    hintVisible = false;
+    $("hintBtn").textContent = "💡 Show Position Hint";
+    $("onlinePillText").textContent = "Online · Room " + (currentRoomCode || "?");
+    closeOnlineModal();
+    startRound();                          // host (Player 1) always moves first
+    toast(myIndex === 0 ? "Friend joined — you go first!" : "Connected — your friend goes first!");
+  }
+
+  function handleMessage(msg) {
+    if (!msg || typeof msg !== "object") return;
+    if (msg.type === "strike" && Array.isArray(msg.cells)) {
+      // Show the friend's selection briefly, then strike
+      for (const [r, i] of msg.cells) selected.add(r + "-" + i);
+      render();
+      setTimeout(() => { selected.clear(); applyStrike(msg.cells, true); }, 450);
+    } else if (msg.type === "restart") {
+      startRound();
+      toast("New round started.");
+    } else if (msg.type === "leave") {
+      leaveOnline("Your friend left the room.");
+    }
+  }
+
+  $("onlineBtn").addEventListener("click", () => {
+    if (mode === "online") { toast("You're already in a room. Use \"Leave Online Room\" first."); return; }
+    if (typeof Peer === "undefined") { toast("Online play couldn't load. Check your internet connection."); return; }
+    openOnlineModal();
+  });
+  $("onlineCancelBtn").addEventListener("click", () => { destroyPeer(); closeOnlineModal(); });
+  $("hostCancelBtn").addEventListener("click", () => { destroyPeer(); showOnlineView("menu"); });
+  onlineOverlay.addEventListener("click", e => {
+    if (e.target === onlineOverlay && !onlineActive) { destroyPeer(); closeOnlineModal(); }
+  });
+
+  $("createRoomBtn").addEventListener("click", () => {
+    destroyPeer();
+    const code = randomCode();
+    currentRoomCode = code;
+    $("onlineMenuStatus").textContent = "Creating room…";
+    peer = new Peer(ROOM_PREFIX + code, { config: ICE_CONFIG });
+    peer.on("open", () => {
+      $("roomCodeDisplay").textContent = code;
+      showOnlineView("host");
     });
-
-    undoBtn.addEventListener('click', () => {
-      lastMove.forEach(bar => bar.classList.remove('struck'));
-      lastMove = [];
-      switchPlayer();
+    peer.on("connection", c => {
+      myIndex = 0;
+      wireConnection(c);
+      c.on("open", () => startOnlineMatch());
     });
-
-    strikeoutBtn.addEventListener('click', strikeOutBars);
-
-    playComputerBtn.addEventListener('click', () => {
-      playWithComputer = true;
-      currentPlayer = 1;
-      updateTurnIndicator();
-      buildBoard();
+    peer.on("error", err => {
+      $("onlineMenuStatus").textContent = "";
+      showOnlineView("menu");
+      toast(err.type === "unavailable-id"
+        ? "Room code clash — try creating again."
+        : "Couldn't create the room. Check your internet and try again.");
+      destroyPeer();
     });
+  });
 
-    helpBtn.addEventListener('click', () => {
-      helpDialog.style.display = helpDialog.style.display === 'block' ? 'none' : 'block';
+  $("joinRoomBtn").addEventListener("click", () => {
+    const code = $("joinCodeInput").value.trim().toUpperCase();
+    if (code.length !== 6) { toast("Enter the 6-character room code."); return; }
+    currentRoomCode = code;
+    destroyPeer();
+    $("onlineMenuStatus").textContent = "Connecting to room " + code + "…";
+    peer = new Peer({ config: ICE_CONFIG });
+    peer.on("open", () => {
+      const c = peer.connect(ROOM_PREFIX + code, { reliable: true });
+      const failTimer = setTimeout(() => {
+        if (!onlineActive) {
+          destroyPeer();
+          $("onlineMenuStatus").textContent = "";
+          toast("Couldn't find that room. Check the code and try again.");
+        }
+      }, 12000);
+      c.on("open", () => { clearTimeout(failTimer); myIndex = 1; wireConnection(c); startOnlineMatch(); });
+      c.on("error", () => { clearTimeout(failTimer); });
     });
+    peer.on("error", err => {
+      $("onlineMenuStatus").textContent = "";
+      toast(err.type === "peer-unavailable"
+        ? "No room found with that code."
+        : "Connection failed. Check your internet and try again.");
+      destroyPeer();
+    });
+  });
 
-    buildBoard();
-  </script>
+  $("joinCodeInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") $("joinRoomBtn").click();
+  });
+
+  $("copyCodeBtn").addEventListener("click", async () => {
+    const code = $("roomCodeDisplay").textContent;
+    try {
+      await navigator.clipboard.writeText(code);
+      toast("Code copied — send it to your friend!");
+    } catch (e) {
+      toast("Copy failed — select the code and copy it manually.");
+    }
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (conn?.open) { try { conn.send({ type: "leave" }); } catch (e) {} }
+  });
+
+  $("hintBtn").addEventListener("click", () => {
+    hintVisible = !hintVisible;
+    $("hintBtn").textContent = hintVisible ? "💡 Hide Position Hint" : "💡 Show Position Hint";
+    render();
+  });
+  $("resetScores").addEventListener("click", () => { scores = [0, 0]; render(); });
+  $("firstMove").addEventListener("change", () => startRound());
+  $("difficulty").addEventListener("change", () => render());
+
+  /* ---------------- Rules modal ---------------- */
+  const rulesOverlay = $("rulesOverlay");
+  function openRules(){ rulesOverlay.classList.add("show"); $("rulesCloseBtn").focus(); }
+  function closeRules(){ rulesOverlay.classList.remove("show"); }
+  $("helpBtn").addEventListener("click", openRules);
+  $("rulesBtn").addEventListener("click", openRules);
+  $("rulesCloseBtn").addEventListener("click", closeRules);
+  rulesOverlay.addEventListener("click", e => { if (e.target === rulesOverlay) closeRules(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && rulesOverlay.classList.contains("show")) closeRules();
+  });
+  // Show the rules automatically on a player's first visit
+  try {
+    if (!localStorage.getItem("strikethrough-seen-rules")) {
+      openRules();
+      localStorage.setItem("strikethrough-seen-rules", "1");
+    }
+  } catch (e) { /* storage unavailable — skip auto-show */ }
+
+  /* ---------------- Round setup ---------------- */
+  function startRound() {
+    struck = ROW_SIZES.map(n => Array(n).fill(false));
+    selected.clear();
+    history = [];
+    gameOver = false;
+    computerThinking = false;
+    turn = (mode === "pvc" && $("firstMove").value === "computer") ? 1 : 0;
+    $("overlay").classList.remove("show");
+    render();
+    if (mode === "pvc" && turn === 1) scheduleComputer();
+  }
+
+  buildBoard();
+  startRound();
+})();
+</script>
 </body>
 </html>
